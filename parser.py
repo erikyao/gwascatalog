@@ -1,4 +1,5 @@
 import os
+import logging
 from collections import defaultdict
 from biothings_client import get_client
 # create symbolic link of myvariant.info repo first
@@ -8,56 +9,6 @@ from biothings.utils.dataload import dict_sweep, open_anyfile, unlist, value_con
 
 
 CHROM_LIST = [str(i) for i in range(1, 23)] + ['x', 'y']
-
-"""
-def get_hgvs_from_vcf(chr, pos, ref, alt, mutant_type=None):
-    '''get a valid hgvs name from VCF-style "chr, pos, ref, alt" data.'''
-    if not (re.match('^[ACGTN]+$', ref) and re.match('^[ACGTN*]+$', alt)):
-        raise ValueError("Cannot convert {} into HGVS id.".format((chr, pos, ref, alt)))
-    if len(ref) == len(alt) == 1:
-        # this is a SNP
-        hgvs = 'chr{0}:g.{1}{2}>{3}'.format(chr, pos, ref, alt)
-        var_type = 'snp'
-    elif len(ref) > 1 and len(alt) == 1:
-        # this is a deletion:
-        if ref[0] == alt:
-            start = int(pos) + 1
-            end = int(pos) + len(ref) - 1
-            if start == end:
-                hgvs = 'chr{0}:g.{1}del'.format(chr, start)
-            else:
-                hgvs = 'chr{0}:g.{1}_{2}del'.format(chr, start, end)
-            var_type = 'del'
-        else:
-            end = int(pos) + len(ref) - 1
-            hgvs = 'chr{0}:g.{1}_{2}delins{3}'.format(chr, pos, end, alt)
-            var_type = 'delins'
-    elif len(ref) == 1 and len(alt) > 1:
-        # this is a insertion
-        if alt[0] == ref:
-            hgvs = 'chr{0}:g.{1}_{2}ins'.format(chr, pos, int(pos) + 1)
-            ins_seq = alt[1:]
-            hgvs += ins_seq
-            var_type = 'ins'
-        else:
-            hgvs = 'chr{0}:g.{1}delins{2}'.format(chr, pos, alt)
-            var_type = 'delins'
-    elif len(ref) > 1 and len(alt) > 1:
-        if ref[0] == alt[0]:
-            # if ref and alt overlap from the left, trim them first
-            _chr, _pos, _ref, _alt = _normalized_vcf(chr, pos, ref, alt)
-            return get_hgvs_from_vcf(_chr, _pos, _ref, _alt, mutant_type=mutant_type)
-        else:
-            end = int(pos) + len(ref) - 1
-            hgvs = 'chr{0}:g.{1}_{2}delins{3}'.format(chr, pos, end, alt)
-            var_type = 'delins'
-    else:
-        raise ValueError("Cannot convert {} into HGVS id.".format((chr, pos, ref, alt)))
-    if mutant_type:
-        return hgvs, var_type
-    else:
-        return hgvs
-"""
 
 
 def batch_query_hgvs_from_rsid(rsid_list):
@@ -71,10 +22,9 @@ def batch_query_hgvs_from_rsid(rsid_list):
             batch = rsid_list[i:]
         params = ','.join(batch)
         res = variant_client.getvariants(params, fields="_id")
-        # print("currently processing {}th variant".format(i))
         for _doc in res:
             if '_id' not in _doc:
-                print('can not convert', _doc)
+                logging.warning('can not convert', _doc)
             hgvs_rsid_dict[_doc['query']] = _doc['_id'] if '_id' in _doc else _doc["query"]
     return hgvs_rsid_dict
 
@@ -112,7 +62,7 @@ def reorganize_field(field_value, seperator, num_snps):
             new_value += [None] * (num_snps - len(new_value))
             return new_value
         else:
-            print('new value', new_value, num_snps)
+            logging.info('new value', new_value, num_snps)
 
 
 def parse_separator_and_snps(row):
@@ -139,15 +89,14 @@ def parse_separator_and_snps(row):
             try:
                 snps = [get_hgvs_from_vcf(chrom, pos, ref, alt)]
             except ValueError:
-                print(row["SNPS"])
+                logging.warning(row["SNPS"])
         else:
-            print(row["SNPS"])
+            logging.warning(row["SNPS"])
     return (snps, seperator)
 
 
 def load_data(data_folder):
     input_file = os.path.join(data_folder, "alternative")
-    # input_file = os.path.join(data_folder, "gwas_catalog_v1.0.2-associations_e96_r2019-04-21.tsv")
     assert os.path.exists(input_file), "Can't find input file '%s'" % input_file
     with open_anyfile(input_file) as in_f:
 
